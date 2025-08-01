@@ -118,8 +118,42 @@
         #speedDisplay {
             display: none;
         }
+        
+        #userIdDisplay {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-family: 'Inter', sans-serif;
+            font-size: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 4px 8px;
+            border-radius: 8px;
+            z-index: 10;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 90%;
+            /* NEU: User-ID-Anzeige ausblenden */
+            display: none;
+        }
+        
+        /* NEU: Styling für die Versionsnummer - jetzt nur ein Element */
+        #versionDisplay {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            font-size: 8px; /* Kleiner gemacht, wie gewünscht */
+            padding: 0; /* Kleinerer Padding */
+            z-index: 30; /* Höherer z-index, um sicherzustellen, dass sie immer sichtbar ist */
+            display: block; /* Versionsnummer immer anzeigen */
+        }
 
-        #startScreen, #gameOverScreen {
+
+        #startScreen, #gameOverScreen, #loadingScreen {
             position: absolute;
             top: 0;
             left: 0;
@@ -138,7 +172,7 @@
             border-radius: 10px;
         }
 
-        #startScreen h1, #gameOverScreen h1 {
+        #startScreen h1, #gameOverScreen h1, #loadingScreen h1 {
             font-size: 3em;
             margin-bottom: 10px;
             color: #007bff; /* Blau für Start */
@@ -148,8 +182,12 @@
         #gameOverScreen h1 {
             color: #ff4d4d; /* Rot für GAME OVER */
         }
+        
+        #loadingScreen h1 {
+            color: #007bff;
+        }
 
-        #startScreen p, #gameOverScreen p {
+        #startScreen p, #gameOverScreen p, #loadingScreen p {
             font-size: 1.5em;
             margin: 0; /* Entferne standardmäßigen Margin */
         }
@@ -187,6 +225,18 @@
                 transform: scale(1.05);
                 text-shadow: 0 0 15px rgba(0, 255, 127, 1);
             }
+        }
+        /* ---------------------------------------------------- */
+        
+        /* --- Styling für die Firebase-Fehlermeldung --- */
+        #firebaseErrorMessage {
+            color: #ff4d4d; /* Rot */
+            font-size: 1.2em;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(255, 77, 77, 0.7);
+            margin-bottom: 10px;
+            display: none;
+            text-align: center;
         }
         /* ---------------------------------------------------- */
 
@@ -230,15 +280,23 @@
     </div>
     <!-- Score-Inkrement außerhalb des Containers für die mittige Positionierung -->
     <span id="scoreIncrementDisplay"></span>
-    <!-- NEU: Container für die Anzeigen auf der rechten Seite -->
+    <!-- Container für die Anzeigen auf der rechten Seite -->
     <div id="ui-right-container">
-        <!-- Geschwindigkeit wird nicht mehr angezeigt, aber der Span bleibt für die Funktionalität (Tastenkürzel) -->
         <span id="speedDisplay" class="ui-display">Player Speed: 6.92</span>
-        <!-- NEU: Position von Distanz und Raketen getauscht -->
         <span id="distanceDisplay" class="ui-display">Distance: 0m</span>
         <span id="rocketCountDisplay" class="ui-display">Rockets inbound: 0</span>
     </div>
     <canvas id="gameCanvas"></canvas>
+    <!-- Anzeige der User ID am unteren Bildschirmrand -->
+    <span id="userIdDisplay">User ID: ...</span>
+    
+    <!-- NEU: Versionsnummer am unteren rechten Bildschirmrand, jetzt immer sichtbar -->
+    <span id="versionDisplay">v1</span>
+
+    <div id="loadingScreen">
+        <h1>Laden...</h1>
+        <p>Verbinde mit der Datenbank...</p>
+    </div>
 
     <div id="startScreen">
         <h1>Mayday!</h1>
@@ -251,22 +309,28 @@
 
     <div id="gameOverScreen">
         <h1>GAME OVER!</h1>
-        <!-- NEU: Wrapper-Div für die Score-Elemente -->
+        <!-- Wrapper-Div für die Score-Elemente -->
         <div class="game-over-scores">
             <p>Dein Score: <span id="finalScore">0</span></p>
-            <!-- NEU: Distanzanzeige mit Highscore getauscht und Schriftgröße angepasst -->
             <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
                 <span id="newHighScoreMessage">🎉 Neuer High Score! 🎉</span>
                 <span id="gameOverHighScore">High Score: 0</span>
             </div>
+            <!-- Platzhalter für die Fehlermeldung -->
+            <span id="firebaseErrorMessage"></span>
             <p style="font-size: 1.2em;">Distanz: <span id="finalDistance">0m</span></p>
         </div>
-        <!-- NEU: Download-Link für das letzte Bild -->
+        <!-- Download-Link für das letzte Bild -->
         <a id="downloadLastMomentButton" download="mayday_last_moment.png">Last Moment</a>
         <p style="font-size: 1em; margin-top: 20px;">Tippe auf den Bildschirm, um neu zu starten!</p>
     </div>
 
-    <script>
+    <script type="module">
+        // Importiere Firebase-Module
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
         // Lade die Inter-Schriftart von Google Fonts
         const link = document.createElement('link');
         link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap';
@@ -290,8 +354,84 @@
         const finalDistanceDisplay = document.getElementById('finalDistance');
         const scoreDisplayContainer = document.getElementById('scoreDisplayContainer');
         const uiRightContainer = document.getElementById('ui-right-container');
-        // NEU: Referenz zum Download-Button
         const downloadLastMomentButton = document.getElementById('downloadLastMomentButton');
+        const loadingScreen = document.getElementById('loadingScreen');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        // Referenz zur Fehlermeldung
+        const firebaseErrorMessage = document.getElementById('firebaseErrorMessage');
+
+
+        // Globale Firebase-Variablen
+        let app;
+        let auth;
+        let db;
+        let userId;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        let isFirebaseReady = false;
+        let highScoreLoaded = false;
+        const highScoresPath = `/artifacts/${appId}/public/data/highscores`;
+
+        /**
+         * Initialisiert Firebase und richtet Authentifizierung und Daten-Listener ein.
+         */
+        async function setupFirebase() {
+            try {
+                // Firebase-Konfiguration
+                const firebaseConfig = JSON.parse(__firebase_config);
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // Authentifizierung
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // Warte auf Authentifizierungsstatusänderung
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdDisplay.textContent = `User ID: ${userId}`;
+                        isFirebaseReady = true;
+
+                        // Richte den Echtzeit-Highscore-Listener ein
+                        const highScoreDocRef = doc(db, highScoresPath, 'global');
+                        onSnapshot(highScoreDocRef, (docSnap) => {
+                            if (docSnap.exists()) {
+                                const data = docSnap.data();
+                                highScore = data.score;
+                            } else {
+                                // Wenn kein Highscore-Dokument existiert, initialisiere es mit 0
+                                setDoc(highScoreDocRef, { score: 0 });
+                                highScore = 0;
+                            }
+                            startScreenHighScore.textContent = `High Score: ${highScore}`;
+                            gameOverHighScore.textContent = `High Score: ${highScore}`;
+                            highScoreLoaded = true;
+                            loadingScreen.style.display = 'none';
+                            startScreen.style.display = 'flex';
+                        });
+                    } else {
+                        // Benutzer ist abgemeldet, oder die Anmeldung ist fehlgeschlagen
+                        console.error("Firebase Authentication failed.");
+                        userId = 'anonymous';
+                        userIdDisplay.textContent = `User ID: ${userId}`;
+                        highScoreLoaded = true; // Weiterhin das Spiel starten, aber ohne Highscore-Funktionalität
+                        loadingScreen.style.display = 'none';
+                        startScreen.style.display = 'flex';
+                    }
+                });
+            } catch (e) {
+                console.error("Fehler bei der Firebase-Initialisierung:", e);
+                // Fallback, um das Spiel trotzdem zu starten
+                highScoreLoaded = true;
+                loadingScreen.style.display = 'none';
+                startScreen.style.display = 'flex';
+            }
+        }
 
         // --- FARB-EINSTELLUNGEN ---
         const isInverted = false;
@@ -387,12 +527,15 @@
 
         const TRAIL_LENGTH_ROCKET = 15;
         const TRAIL_SPACING_ROCKET = 2;
+        
+        // NEU: Versionsnummer des Spiels, vereinfacht und direkt gesetzt
+        const VERSION = 'v1';
 
         let player;
         let rockets = [];
         let stars = [];
         let score = 0;
-        let highScore = 0;
+        let highScore = 0; // Wird jetzt über Firestore aktualisiert
         let distanceTraveled = 0;
         let gameStarted = false;
         let playerMovementEnabled = true;
@@ -412,7 +555,7 @@
         
         let isGameOverUIUpdated = false;
 
-        // NEU: Variable zum Speichern des Bildes vom letzten Moment
+        // Variable zum Speichern des Bildes vom letzten Moment
         let lastMomentImage = null;
 
         /**
@@ -427,22 +570,39 @@
 
         // Event-Listener für Größenänderungen des Fensters
         window.addEventListener('resize', resizeCanvas);
-
+        
         /**
-         * Lädt den Highscore aus dem lokalen Speicher.
-         * @returns {number} Der gespeicherte Highscore oder 0, wenn keiner gefunden wird.
+         * Zeigt eine Fehlermeldung auf dem Game-Over-Bildschirm an.
+         * @param {string} message - Die anzuzeigende Nachricht.
          */
-        function loadHighScore() {
-            const storedScore = localStorage.getItem('maydayHighScore');
-            return storedScore ? parseInt(storedScore, 10) : 0;
+        function showFirebaseError(message) {
+            firebaseErrorMessage.textContent = message;
+            firebaseErrorMessage.style.display = 'block';
+            // Verstecke die Nachricht nach 5 Sekunden
+            setTimeout(() => {
+                firebaseErrorMessage.style.display = 'none';
+            }, 5000);
         }
 
         /**
-         * Speichert den Highscore im lokalen Speicher.
-         * @param {number} newScore - Der neue Highscore.
+         * Speichert den Highscore in der Datenbank, wenn er höher ist als der aktuelle.
+         * @param {number} newScore - Der neue Score.
          */
-        function saveHighScore(newScore) {
-            localStorage.setItem('maydayHighScore', newScore.toString());
+        async function saveHighScore(newScore) {
+            if (!isFirebaseReady) return;
+
+            const highScoreDocRef = doc(db, highScoresPath, 'global');
+
+            try {
+                if (newScore > highScore) {
+                    await setDoc(highScoreDocRef, { score: newScore });
+                    console.log("Highscore erfolgreich aktualisiert!");
+                }
+            } catch (e) {
+                console.error("Fehler beim Speichern des Highscores:", e);
+                // Zeige die Fehlermeldung auf dem Bildschirm an
+                showFirebaseError("Highscore-Service ist nicht verfügbar. Limit erreicht.");
+            }
         }
         
         /**
@@ -673,8 +833,8 @@
          */
         function endGame() {
             if (score > highScore) {
-                highScore = score;
-                saveHighScore(highScore);
+                // Highscore in Firestore speichern
+                saveHighScore(score);
                 newHighScoreMessage.style.display = 'block';
                 gameOverHighScore.style.display = 'none';
             } else {
@@ -694,7 +854,6 @@
             
             gameOverScreen.style.display = 'flex';
             isGameOverUIUpdated = true;
-
         }
 
         /**
@@ -704,7 +863,6 @@
             player = new Player();
             rockets = [];
             score = 0;
-            highScore = loadHighScore();
             distanceTraveled = 0;
             gameStarted = false;
             playerMovementEnabled = true;
@@ -733,13 +891,14 @@
             gameOverHighScore.textContent = `High Score: ${highScore}`;
             newHighScoreMessage.style.display = 'none';
             gameOverHighScore.style.display = 'block';
+            firebaseErrorMessage.style.display = 'none'; // Verstecke die Fehlermeldung beim Neustart
             speedDisplay.textContent = `Player Speed: ${player.speed.toFixed(2)}`;
             rocketCountDisplay.textContent = `Rockets inbound: 0`;
             startScreen.style.display = 'flex';
             gameOverScreen.style.display = 'none';
             uiRightContainer.style.display = 'none';
             downloadLastMomentButton.style.display = 'none';
-            
+
             resizeCanvas();
         }
 
@@ -877,13 +1036,8 @@
             }
 
             if (!gameStarted) {
-                startScreen.style.display = 'flex';
                 return;
             }
-
-            startScreen.style.display = 'none';
-            gameOverScreen.style.display = 'none';
-            isGameOverUIUpdated = false;
 
             const deltaTime = currentTime - lastFrameTime;
             lastFrameTime = currentTime;
@@ -1026,36 +1180,33 @@
             }
         }, { passive: false });
 
-        // NEU: Event-Listener, um das Spiel über den Start-Bildschirm zu starten
-        startScreen.addEventListener('mousedown', (e) => {
-            // Check, ob der Klick von einem Element kam, das den Neustart verhindern sollte (hier nicht nötig, aber als gute Praxis)
-            initGame();
-            startGame();
-        });
+        // Event-Listener, um das Spiel über den Start-Bildschirm zu starten
+        function handleStartGame() {
+            if (highScoreLoaded) {
+                initGame();
+                startGame();
+            }
+        }
+        startScreen.addEventListener('mousedown', handleStartGame);
         startScreen.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // Verhindert das Standard-Verhalten des Touch-Events (z.B. Scrollen)
-            initGame();
-            startGame();
+            e.preventDefault();
+            handleStartGame();
         }, { passive: false });
 
-        // NEU: Event-Listener, um das Spiel über den Game-Over-Bildschirm neu zu starten
-        gameOverScreen.addEventListener('mousedown', (e) => {
-            // Wichtig: Überprüfe, ob das geklickte Element NICHT der Download-Button ist
+        // Event-Listener, um das Spiel über den Game-Over-Bildschirm neu zu starten
+        function handleRestartGame(e) {
             if (e.target !== downloadLastMomentButton) {
                 initGame();
                 startGame();
             }
-        });
+        }
+        gameOverScreen.addEventListener('mousedown', handleRestartGame);
         gameOverScreen.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            // Wichtig: Überprüfe, ob das geklickte Element NICHT der Download-Button ist
-            if (e.target !== downloadLastMomentButton) {
-                initGame();
-                startGame();
-            }
+            handleRestartGame(e);
         }, { passive: false });
         
-        // NEU: Füge einen expliziten Klick-Handler für den Download-Button hinzu, um das Neustart-Ereignis zu stoppen.
+        // Füge einen expliziten Klick-Handler für den Download-Button hinzu, um das Neustart-Ereignis zu stoppen.
         downloadLastMomentButton.addEventListener('mousedown', (e) => {
             e.stopPropagation();
         });
@@ -1075,6 +1226,8 @@
             }
         });
 
+        // Startet die Firebase-Initialisierung, um den Highscore zu laden
+        setupFirebase();
         initGame();
     </script>
 </body>
