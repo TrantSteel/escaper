@@ -135,20 +135,21 @@
             overflow: hidden;
             text-overflow: ellipsis;
             max-width: 90%;
+            /* NEU: User-ID-Anzeige ausblenden */
+            display: none;
         }
         
-        /* NEU: Styling für die Versionsnummer */
+        /* NEU: Styling für die Versionsnummer - jetzt nur ein Element */
         #versionDisplay {
             position: absolute;
             bottom: 10px;
             right: 10px;
             color: white;
             font-family: 'Inter', sans-serif;
-            font-size: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 4px 8px;
-            border-radius: 8px;
-            z-index: 10;
+            font-size: 8px; /* Kleiner gemacht, wie gewünscht */
+            padding: 0; /* Kleinerer Padding */
+            z-index: 30; /* Höherer z-index, um sicherzustellen, dass sie immer sichtbar ist */
+            display: block; /* Versionsnummer immer anzeigen */
         }
 
 
@@ -288,8 +289,9 @@
     <canvas id="gameCanvas"></canvas>
     <!-- Anzeige der User ID am unteren Bildschirmrand -->
     <span id="userIdDisplay">User ID: ...</span>
-    <!-- NEU: Anzeige der Versionsnummer am unteren rechten Bildschirmrand -->
-    <span id="versionDisplay"></span>
+    
+    <!-- NEU: Versionsnummer am unteren rechten Bildschirmrand, jetzt immer sichtbar -->
+    <span id="versionDisplay">v1</span>
 
     <div id="loadingScreen">
         <h1>Laden...</h1>
@@ -357,8 +359,7 @@
         const userIdDisplay = document.getElementById('userIdDisplay');
         // Referenz zur Fehlermeldung
         const firebaseErrorMessage = document.getElementById('firebaseErrorMessage');
-        // NEU: Referenz zur Versionsnummer
-        const versionDisplay = document.getElementById('versionDisplay');
+
 
         // Globale Firebase-Variablen
         let app;
@@ -527,8 +528,8 @@
         const TRAIL_LENGTH_ROCKET = 15;
         const TRAIL_SPACING_ROCKET = 2;
         
-        // NEU: Versionsnummer des Spiels
-        const VERSION = 'v1.0';
+        // NEU: Versionsnummer des Spiels, vereinfacht und direkt gesetzt
+        const VERSION = 'v1';
 
         let player;
         let rockets = [];
@@ -853,7 +854,6 @@
             
             gameOverScreen.style.display = 'flex';
             isGameOverUIUpdated = true;
-
         }
 
         /**
@@ -898,8 +898,7 @@
             gameOverScreen.style.display = 'none';
             uiRightContainer.style.display = 'none';
             downloadLastMomentButton.style.display = 'none';
-            versionDisplay.textContent = VERSION; // Setze die Versionsnummer
-            
+
             resizeCanvas();
         }
 
