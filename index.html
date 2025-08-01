@@ -136,6 +136,21 @@
             text-overflow: ellipsis;
             max-width: 90%;
         }
+        
+        /* NEU: Styling für die Versionsnummer */
+        #versionDisplay {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            font-size: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 4px 8px;
+            border-radius: 8px;
+            z-index: 10;
+        }
+
 
         #startScreen, #gameOverScreen, #loadingScreen {
             position: absolute;
@@ -212,7 +227,7 @@
         }
         /* ---------------------------------------------------- */
         
-        /* --- NEU: Styling für die Firebase-Fehlermeldung --- */
+        /* --- Styling für die Firebase-Fehlermeldung --- */
         #firebaseErrorMessage {
             color: #ff4d4d; /* Rot */
             font-size: 1.2em;
@@ -264,16 +279,17 @@
     </div>
     <!-- Score-Inkrement außerhalb des Containers für die mittige Positionierung -->
     <span id="scoreIncrementDisplay"></span>
-    <!-- NEU: Container für die Anzeigen auf der rechten Seite -->
+    <!-- Container für die Anzeigen auf der rechten Seite -->
     <div id="ui-right-container">
-        <!-- Geschwindigkeit wird nicht mehr angezeigt, aber der Span bleibt für die Funktionalität (Tastenkürzel) -->
         <span id="speedDisplay" class="ui-display">Player Speed: 6.92</span>
-        <!-- NEU: Position von Distanz und Raketen getauscht -->
         <span id="distanceDisplay" class="ui-display">Distance: 0m</span>
         <span id="rocketCountDisplay" class="ui-display">Rockets inbound: 0</span>
     </div>
     <canvas id="gameCanvas"></canvas>
+    <!-- Anzeige der User ID am unteren Bildschirmrand -->
     <span id="userIdDisplay">User ID: ...</span>
+    <!-- NEU: Anzeige der Versionsnummer am unteren rechten Bildschirmrand -->
+    <span id="versionDisplay"></span>
 
     <div id="loadingScreen">
         <h1>Laden...</h1>
@@ -291,19 +307,18 @@
 
     <div id="gameOverScreen">
         <h1>GAME OVER!</h1>
-        <!-- NEU: Wrapper-Div für die Score-Elemente -->
+        <!-- Wrapper-Div für die Score-Elemente -->
         <div class="game-over-scores">
             <p>Dein Score: <span id="finalScore">0</span></p>
-            <!-- NEU: Distanzanzeige mit Highscore getauscht und Schriftgröße angepasst -->
             <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
                 <span id="newHighScoreMessage">🎉 Neuer High Score! 🎉</span>
                 <span id="gameOverHighScore">High Score: 0</span>
             </div>
-            <!-- NEU: Platzhalter für die Fehlermeldung -->
+            <!-- Platzhalter für die Fehlermeldung -->
             <span id="firebaseErrorMessage"></span>
             <p style="font-size: 1.2em;">Distanz: <span id="finalDistance">0m</span></p>
         </div>
-        <!-- NEU: Download-Link für das letzte Bild -->
+        <!-- Download-Link für das letzte Bild -->
         <a id="downloadLastMomentButton" download="mayday_last_moment.png">Last Moment</a>
         <p style="font-size: 1em; margin-top: 20px;">Tippe auf den Bildschirm, um neu zu starten!</p>
     </div>
@@ -340,8 +355,10 @@
         const downloadLastMomentButton = document.getElementById('downloadLastMomentButton');
         const loadingScreen = document.getElementById('loadingScreen');
         const userIdDisplay = document.getElementById('userIdDisplay');
-        // NEU: Referenz zur Fehlermeldung
+        // Referenz zur Fehlermeldung
         const firebaseErrorMessage = document.getElementById('firebaseErrorMessage');
+        // NEU: Referenz zur Versionsnummer
+        const versionDisplay = document.getElementById('versionDisplay');
 
         // Globale Firebase-Variablen
         let app;
@@ -509,6 +526,9 @@
 
         const TRAIL_LENGTH_ROCKET = 15;
         const TRAIL_SPACING_ROCKET = 2;
+        
+        // NEU: Versionsnummer des Spiels
+        const VERSION = 'v1.0';
 
         let player;
         let rockets = [];
@@ -534,7 +554,7 @@
         
         let isGameOverUIUpdated = false;
 
-        // NEU: Variable zum Speichern des Bildes vom letzten Moment
+        // Variable zum Speichern des Bildes vom letzten Moment
         let lastMomentImage = null;
 
         /**
@@ -579,7 +599,7 @@
                 }
             } catch (e) {
                 console.error("Fehler beim Speichern des Highscores:", e);
-                // NEU: Zeige die Fehlermeldung auf dem Bildschirm an
+                // Zeige die Fehlermeldung auf dem Bildschirm an
                 showFirebaseError("Highscore-Service ist nicht verfügbar. Limit erreicht.");
             }
         }
@@ -812,7 +832,7 @@
          */
         function endGame() {
             if (score > highScore) {
-                // NEU: Highscore in Firestore speichern
+                // Highscore in Firestore speichern
                 saveHighScore(score);
                 newHighScoreMessage.style.display = 'block';
                 gameOverHighScore.style.display = 'none';
@@ -878,6 +898,7 @@
             gameOverScreen.style.display = 'none';
             uiRightContainer.style.display = 'none';
             downloadLastMomentButton.style.display = 'none';
+            versionDisplay.textContent = VERSION; // Setze die Versionsnummer
             
             resizeCanvas();
         }
@@ -1160,7 +1181,7 @@
             }
         }, { passive: false });
 
-        // NEU: Event-Listener, um das Spiel über den Start-Bildschirm zu starten
+        // Event-Listener, um das Spiel über den Start-Bildschirm zu starten
         function handleStartGame() {
             if (highScoreLoaded) {
                 initGame();
@@ -1173,7 +1194,7 @@
             handleStartGame();
         }, { passive: false });
 
-        // NEU: Event-Listener, um das Spiel über den Game-Over-Bildschirm neu zu starten
+        // Event-Listener, um das Spiel über den Game-Over-Bildschirm neu zu starten
         function handleRestartGame(e) {
             if (e.target !== downloadLastMomentButton) {
                 initGame();
@@ -1186,7 +1207,7 @@
             handleRestartGame(e);
         }, { passive: false });
         
-        // NEU: Füge einen expliziten Klick-Handler für den Download-Button hinzu, um das Neustart-Ereignis zu stoppen.
+        // Füge einen expliziten Klick-Handler für den Download-Button hinzu, um das Neustart-Ereignis zu stoppen.
         downloadLastMomentButton.addEventListener('mousedown', (e) => {
             e.stopPropagation();
         });
