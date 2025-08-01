@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mayday! Raketen-Ausweichspiel</title>
+    <style>
+        /* Diese CSS-Farben werden dynamisch durch JavaScript basierend auf der isInverted-Einstellung überschrieben */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a2e; /* Dunkler Hintergrund für den Bereich außerhalb des Canvas */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        canvas {
+            display: block;
+            background-color: transparent; /* Canvas-Hintergrund wird dynamisch gezeichnet */
+            border: 2px solid #007bff; /* Blauer Rahmen */
+            max-width: 100%;
+            max-height: 100vh;
+            box-sizing: border-box;
+            border-radius: 10px;
+        }
+
+        #scoreDisplayContainer {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+            z-index: 10;
+            transition: transform 0.3s ease-in-out; /* Hinzugefügt für die Skalierung */
+        }
+
+        /* Keyframe-Animation für das Score-Container-Bouncing */
+        @keyframes scoreBounce {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+
+        .score-bounce {
+            animation: scoreBounce 0.3s ease-in-out;
+        }
+
+        #scoreDisplay {
+            color: white;
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.5s ease-out;
+            opacity: 1; /* Standardmäßig sichtbar */
+        }
+
+        #scoreIncrementDisplay {
+            position: absolute; /* Neu: Absolute Positionierung */
+            top: 50%; /* Neu: Vertikal zentrieren */
+            left: 50%; /* Neu: Horizontal zentrieren */
+            transform: translate(-50%, -50%); /* Neu: Korrigiert die Position, um die Mitte zu finden */
+            font-size: 50px; /* Neu: Größerer Text */
+            font-family: 'Inter', sans-serif;
+            color: white; /* Neu: Weiße Farbe für bessere Sichtbarkeit */
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            display: block;
+            z-index: 15; /* Neu: Über anderen UI-Elementen */
+        }
+
+        /* Keyframe-Animation für das Score-Inkrement */
+        @keyframes floatAndFade {
+            0% {
+                transform: translate(-50%, 0) scale(1.0);
+                opacity: 0.7; /* Neu: Startet halbtransparent */
+            }
+            100% {
+                transform: translate(-50%, -50px) scale(1.5); /* Neu: Schwebt höher und wird größer */
+                opacity: 0;
+            }
+        }
+
+        .show-increment {
+            animation: floatAndFade 1s forwards;
+        }
+
+        #ui-right-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 5px;
+            z-index: 10;
+        }
+
+        .ui-display {
+            color: white;
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+        
+        #speedDisplay {
+            display: none;
+        }
+
+        #startScreen, #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Inter', sans-serif;
+            font-size: 18px;
+            text-align: center;
+            z-index: 20;
+            border-radius: 10px;
+        }
+
+        #startScreen h1, #gameOverScreen h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            color: #007bff; /* Blau für Start */
+            text-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+        }
+
+        #gameOverScreen h1 {
+            color: #ff4d4d; /* Rot für GAME OVER */
+        }
+
+        #startScreen p, #gameOverScreen p {
+            font-size: 1.5em;
+            margin: 0; /* Entferne standardmäßigen Margin */
+        }
+
+        #gameOverScreen button {
+            display: none;
+        }
+
+        .high-score-container {
+            margin-top: 20px;
+            font-size: 1.2em;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+
+        /* --- Styling für die neue Highscore-Meldung --- */
+        #newHighScoreMessage {
+            font-size: 1.2em;
+            color: #00ff7f; /* Helles Grün */
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0, 255, 127, 0.7); /* Helleres Leuchten */
+            margin-bottom: 10px; /* Abstand zum Highscore */
+            display: none; /* Standardmäßig versteckt */
+            animation: pulse 1s infinite alternate; /* Animation hinzufügen */
+        }
+
+        /* Keyframe-Animation für das "Glühen" der Highscore-Meldung */
+        @keyframes pulse {
+            from {
+                transform: scale(1);
+                text-shadow: 0 0 5px rgba(0, 255, 127, 0.7);
+            }
+            to {
+                transform: scale(1.05);
+                text-shadow: 0 0 15px rgba(0, 255, 127, 1);
+            }
+        }
+        /* ---------------------------------------------------- */
+
+
+        /* Flex-Container für die Game Over Scores zur besseren Abstandssteuerung */
+        .game-over-scores {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px; /* Kleiner Abstand zwischen den Score-Elementen */
+            margin-top: 10px; /* Abstand zum "GAME OVER!"-Titel */
+        }
+        
+        /* --- Styling für den neuen Download-Button --- */
+        #downloadLastMomentButton {
+            margin-top: 20px;
+            padding: 12px 24px;
+            font-size: 1em;
+            font-weight: bold;
+            text-decoration: none;
+            color: white;
+            background-color: #007bff;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
+            display: none; /* Anfangs versteckt */
+        }
+
+        #downloadLastMomentButton:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div id="scoreDisplayContainer">
+        <span id="scoreDisplay">Score: 0</span>
+    </div>
+    <!-- Score-Inkrement außerhalb des Containers für die mittige Positionierung -->
+    <span id="scoreIncrementDisplay"></span>
+    <!-- NEU: Container für die Anzeigen auf der rechten Seite -->
+    <div id="ui-right-container">
+        <!-- Geschwindigkeit wird nicht mehr angezeigt, aber der Span bleibt für die Funktionalität (Tastenkürzel) -->
+        <span id="speedDisplay" class="ui-display">Player Speed: 6.92</span>
+        <!-- NEU: Position von Distanz und Raketen getauscht -->
+        <span id="distanceDisplay" class="ui-display">Distance: 0m</span>
+        <span id="rocketCountDisplay" class="ui-display">Rockets inbound: 0</span>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="startScreen">
+        <h1>Mayday!</h1>
+        <p>Raketen-Ausweichspiel</p>
+        <p style="font-size: 1em; margin-top: 20px;">Tippe auf den Bildschirm, um zu starten!</p>
+        <div class="high-score-container">
+            <span id="startScreenHighScore">High Score: 0</span>
+        </div>
+    </div>
+
+    <div id="gameOverScreen">
+        <h1>GAME OVER!</h1>
+        <!-- NEU: Wrapper-Div für die Score-Elemente -->
+        <div class="game-over-scores">
+            <p>Dein Score: <span id="finalScore">0</span></p>
+            <!-- NEU: Distanzanzeige mit Highscore getauscht und Schriftgröße angepasst -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                <span id="newHighScoreMessage">🎉 Neuer High Score! 🎉</span>
+                <span id="gameOverHighScore">High Score: 0</span>
+            </div>
+            <p style="font-size: 1.2em;">Distanz: <span id="finalDistance">0m</span></p>
+        </div>
+        <!-- NEU: Download-Link für das letzte Bild -->
+        <a id="downloadLastMomentButton" download="mayday_last_moment.png">Last Moment</a>
+        <p style="font-size: 1em; margin-top: 20px;">Tippe auf den Bildschirm, um neu zu starten!</p>
+    </div>
+
+    <script>
+        // Lade die Inter-Schriftart von Google Fonts
+        const link = document.createElement('link');
+        link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap';
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+
+        // Referenzen zu DOM-Elementen
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const startScreenHighScore = document.getElementById('startScreenHighScore');
+        const gameOverHighScore = document.getElementById('gameOverHighScore');
+        const newHighScoreMessage = document.getElementById('newHighScoreMessage');
+        const scoreIncrementDisplay = document.getElementById('scoreIncrementDisplay');
+        const speedDisplay = document.getElementById('speedDisplay');
+        const rocketCountDisplay = document.getElementById('rocketCountDisplay');
+        const distanceDisplay = document.getElementById('distanceDisplay');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const finalDistanceDisplay = document.getElementById('finalDistance');
+        const scoreDisplayContainer = document.getElementById('scoreDisplayContainer');
+        const uiRightContainer = document.getElementById('ui-right-container');
+        // NEU: Referenz zum Download-Button
+        const downloadLastMomentButton = document.getElementById('downloadLastMomentButton');
+
+        // --- FARB-EINSTELLUNGEN ---
+        const isInverted = false;
+
+        /**
+         * Gibt ein Farbschema basierend auf dem Invertierungsstatus zurück.
+         * @param {boolean} inverted - True für invertierte Farben, false für normale Farben.
+         * @returns {object} Ein Objekt mit Farbdefinitionen.
+         */
+        function getColors(inverted) {
+            if (inverted) {
+                return {
+                    bodyBg: '#DDDDDD',
+                    canvasBorder: '#555555',
+                    canvasGradient1: '#AAAAAA',
+                    canvasGradient2: '#777777',
+                    canvasGradient3: '#333333',
+                    starColor: (opacity) => `rgba(50, 50, 50, ${opacity})`,
+                    playerColor: '#000000',
+                    playerTrailColor: (opacity) => `rgba(100, 100, 100, ${opacity})`,
+                    playerGradientLight: '#333333',
+                    playerGradientDark: '#000000',
+                    rocketColor: '#333333',
+                    rocketTrailColor: (opacity) => `rgba(70, 70, 70, ${opacity})`,
+                    uiTextColor: 'black',
+                    uiBgColor: 'rgba(255, 255, 255, 0.6)',
+                    startGameOverH1: '#222222',
+                    gameOverH1: '#111111'
+                };
+            } else {
+                return {
+                    bodyBg: '#1a1a2e',
+                    canvasBorder: '#007bff',
+                    canvasGradient1: '#ADD8E6',
+                    canvasGradient2: '#6A5ACD',
+                    canvasGradient3: '#191970',
+                    starColor: (opacity) => `rgba(255, 255, 255, ${opacity})`,
+                    playerColor: '#00ff7f',
+                    playerTrailColor: (opacity) => `rgba(173, 216, 230, ${opacity})`,
+                    playerGradientLight: '#00ff7f',
+                    playerGradientDark: '#00b45c',
+                    rocketColor: '#ff0000',
+                    rocketTrailColor: (opacity) => `rgba(255, 165, 0, ${opacity})`,
+                    uiTextColor: 'white',
+                    uiBgColor: 'rgba(0, 0, 0, 0.6)',
+                    startGameOverH1: '#007bff',
+                    gameOverH1: '#ff4d4d'
+                };
+            }
+        }
+
+        const colors = getColors(isInverted);
+
+        // CSS-Stile dynamisch anpassen
+        document.body.style.backgroundColor = colors.bodyBg;
+        canvas.style.borderColor = colors.canvasBorder;
+        scoreDisplay.style.color = colors.uiTextColor;
+        scoreDisplay.style.backgroundColor = colors.uiBgColor;
+        speedDisplay.style.color = colors.uiTextColor;
+        speedDisplay.style.backgroundColor = colors.uiBgColor;
+        rocketCountDisplay.style.color = colors.uiTextColor;
+        rocketCountDisplay.style.backgroundColor = colors.uiBgColor;
+        distanceDisplay.style.color = colors.uiTextColor;
+        distanceDisplay.style.backgroundColor = colors.uiBgColor;
+        startScreen.style.backgroundColor = colors.uiBgColor.replace('0.6', '0.9');
+        startScreen.style.color = colors.uiTextColor;
+        gameOverScreen.style.backgroundColor = colors.uiBgColor.replace('0.6', '0.9');
+        gameOverScreen.style.color = colors.uiTextColor;
+        document.querySelector('#startScreen h1').style.color = colors.startGameOverH1;
+        document.querySelector('#gameOverScreen h1').style.color = colors.gameOverH1;
+
+
+        // Feste Spielparameter
+        const ROCKET_SPAWN_INTERVAL = 2500;
+        const ROCKET_INITIAL_SPEED = 7.25;
+        const SCORE_INTERVAL = 5000;
+        const SCORE_INCREMENT_TIME = 5;
+        const SCORE_PER_ROCKET_COLLISION = 5;
+        const GAME_SPEED_MULTIPLIER = 1.0;
+        const INITIAL_SPAWN_DELAY = 3000;
+
+        const PLAYER_SPEED_ADJUST_STEP = 0.01;
+        const MIN_PLAYER_SPEED = 1.0;
+        const MAX_PLAYER_SPEED = 15.0;
+
+        const NUM_STARS = 500;
+        const STAR_PARALLAX_FACTOR = 0.5;
+        const STAR_WORLD_WIDTH_MULTIPLIER = 3;
+        const STAR_WORLD_HEIGHT_MULTIPLIER = 3;
+
+        const TRAIL_LENGTH_PLAYER = 30;
+        const TRAIL_SPACING_PLAYER = 5;
+
+        const TRAIL_LENGTH_ROCKET = 15;
+        const TRAIL_SPACING_ROCKET = 2;
+
+        let player;
+        let rockets = [];
+        let stars = [];
+        let score = 0;
+        let highScore = 0;
+        let distanceTraveled = 0;
+        let gameStarted = false;
+        let playerMovementEnabled = true;
+        let gameOver = false;
+        let lastRocketSpawnTime = 0;
+        let gameStartTime = 0;
+
+        let lastFrameTime = 0;
+        const TARGET_FPS = 60;
+        const TARGET_FRAME_DURATION_MS = 1000 / TARGET_FPS;
+
+        let worldOffsetX = 0;
+        let worldOffsetY = 0;
+
+        let playerScreenX;
+        let playerScreenY;
+        
+        let isGameOverUIUpdated = false;
+
+        // NEU: Variable zum Speichern des Bildes vom letzten Moment
+        let lastMomentImage = null;
+
+        /**
+         * Passt die Größe des Canvas an die Fenstergröße an.
+         */
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            playerScreenX = canvas.width / 2;
+            playerScreenY = canvas.height / 2;
+        }
+
+        // Event-Listener für Größenänderungen des Fensters
+        window.addEventListener('resize', resizeCanvas);
+
+        /**
+         * Lädt den Highscore aus dem lokalen Speicher.
+         * @returns {number} Der gespeicherte Highscore oder 0, wenn keiner gefunden wird.
+         */
+        function loadHighScore() {
+            const storedScore = localStorage.getItem('maydayHighScore');
+            return storedScore ? parseInt(storedScore, 10) : 0;
+        }
+
+        /**
+         * Speichert den Highscore im lokalen Speicher.
+         * @param {number} newScore - Der neue Highscore.
+         */
+        function saveHighScore(newScore) {
+            localStorage.setItem('maydayHighScore', newScore.toString());
+        }
+        
+        /**
+         * Repräsentiert den Spieler im Spiel.
+         */
+        class Player {
+            constructor() {
+                this.size = 15;
+                this.x = 0;
+                this.y = 0;
+                this.color = colors.playerColor;
+                this.speed = 6.92;
+                this.targetScreenX = playerScreenX;
+                this.targetScreenY = playerScreenY;
+                this.lastMoveX = 0;
+                this.trail = [];
+            }
+
+            /**
+             * Zeichnet den Spieler und seine Spur auf den Canvas.
+             */
+            draw() {
+                // Zeichne die Spielerspur
+                for (let i = 0; i < this.trail.length; i++) {
+                    const trailPoint = this.trail[i];
+                    const displayX = trailPoint.x + worldOffsetX;
+                    const displayY = trailPoint.y + worldOffsetY;
+
+                    const ratio = (i + 1) / this.trail.length;
+                    const trailSize = this.size * 0.3 * ratio;
+                    const trailOpacity = ratio;
+
+                    ctx.fillStyle = colors.playerTrailColor(trailOpacity);
+                    ctx.beginPath();
+                    ctx.arc(displayX, displayY, trailSize, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.save();
+                ctx.translate(playerScreenX, playerScreenY);
+
+                const dx = this.targetScreenX - playerScreenX;
+                const dy = this.targetScreenY - playerScreenY;
+                const angle = Math.atan2(dy, dx);
+                ctx.rotate(angle + Math.PI / 2);
+
+                const gradient = ctx.createLinearGradient(-this.size, 0, this.size, 0);
+
+                const movementThreshold = this.size * 0.1;
+
+                if (this.lastMoveX > movementThreshold) {
+                    gradient.addColorStop(0, colors.playerGradientLight);
+                    gradient.addColorStop(1, colors.playerGradientDark);
+                } else if (this.lastMoveX < -movementThreshold) {
+                    gradient.addColorStop(0, colors.playerGradientDark);
+                    gradient.addColorStop(1, colors.playerGradientLight);
+                } else {
+                    gradient.addColorStop(0, this.color);
+                    gradient.addColorStop(1, this.color);
+                }
+
+                ctx.fillStyle = gradient;
+
+                ctx.beginPath();
+                ctx.moveTo(0, -this.size * 1.5);
+                ctx.lineTo(-this.size, this.size * 0.5);
+                ctx.lineTo(this.size, this.size * 0.5);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.strokeStyle = colors.playerColor;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            /**
+             * Aktualisiert den Zustand des Spielers.
+             * @param {number} speedScaleFactor - Faktor zur Skalierung der Geschwindigkeit basierend auf Delta-Time.
+             */
+            update(speedScaleFactor) {
+                const dxScreen = this.targetScreenX - playerScreenX;
+                const dyScreen = this.targetScreenY - playerScreenY;
+                const distanceScreen = Math.sqrt(dxScreen * dxScreen + dyScreen * dyScreen);
+
+                let moveX = 0;
+                let moveY = 0;
+
+                if (distanceScreen > 1) {
+                    moveX = (dxScreen / distanceScreen) * this.speed * speedScaleFactor;
+                    moveY = (dyScreen / distanceScreen) * this.speed * speedScaleFactor;
+                    this.lastMoveX = moveX;
+                } else {
+                    this.lastMoveX = 0;
+                }
+
+                this.x += moveX;
+                this.y += moveY;
+
+                // Füge einen neuen Punkt zur Spur hinzu, wenn der Abstand groß genug ist
+                // und nur wenn der Spieler sich tatsächlich bewegt
+                if (distanceScreen > 1 && (this.trail.length === 0 ||
+                    Math.sqrt(Math.pow(this.x - this.trail[this.trail.length - 1].x, 2) +
+                                Math.pow(this.y - this.trail[this.trail.length - 1].y, 2)) > TRAIL_SPACING_PLAYER)) {
+                    this.trail.push({ x: this.x, y: this.y });
+                }
+                
+                // Entferne alte Spurpunkte, wenn die Spur zu lang wird oder der Spieler sich nicht bewegt
+                if (distanceScreen <= 1 && this.trail.length > 0) {
+                    this.trail.shift();
+                } else if (this.trail.length > TRAIL_LENGTH_PLAYER) {
+                    this.trail.shift();
+                }
+
+                worldOffsetX = playerScreenX - this.x;
+                worldOffsetY = playerScreenY - this.y;
+            }
+        }
+
+        /**
+         * Repräsentiert eine Rakete im Spiel.
+         */
+        class Rocket {
+            constructor(startX, startY) {
+                this.size = 5;
+                this.x = startX;
+                this.y = startY;
+                this.color = colors.rocketColor;
+                this.speed = ROCKET_INITIAL_SPEED;
+                this.turnSpeed = 0.03;
+                this.trail = [];
+
+                const dxToPlayer = player.x - this.x;
+                const dyToPlayer = player.y - this.y;
+                this.angle = Math.atan2(dyToPlayer, dxToPlayer);
+            }
+
+            /**
+             * Zeichnet die Rakete und ihre Spur auf den Canvas.
+             */
+            draw() {
+                // Zeichne die Raketenspur
+                for (let i = 0; i < this.trail.length; i++) {
+                    const trailPoint = this.trail[i];
+                    const displayX = trailPoint.x + worldOffsetX;
+                    const displayY = trailPoint.y + worldOffsetY;
+
+                    const ratio = (i + 1) / this.trail.length;
+                    const trailSize = this.size * 0.4 * ratio;
+                    const trailOpacity = ratio;
+
+                    ctx.fillStyle = colors.rocketTrailColor(trailOpacity);
+                    ctx.beginPath();
+                    ctx.arc(displayX, displayY, trailSize, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.save();
+
+                const displayX = this.x + worldOffsetX;
+                const displayY = this.y + worldOffsetY;
+
+                ctx.translate(displayX, displayY);
+
+                ctx.rotate(this.angle + Math.PI / 2);
+
+                ctx.fillStyle = this.color;
+
+                const rectWidth = this.size * 1.2;
+                const rectHeight = this.size * 2;
+                const tipHeight = this.size * 0.8;
+
+                ctx.fillRect(-rectWidth / 2, -rectHeight / 2, rectWidth, rectHeight);
+
+                ctx.beginPath();
+                ctx.moveTo(0, -rectHeight / 2 - tipHeight);
+                ctx.lineTo(-rectWidth / 2, -rectHeight / 2);
+                ctx.lineTo(rectWidth / 2, -rectHeight / 2);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.strokeStyle = colors.rocketColor;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            /**
+             * Aktualisiert den Zustand der Rakete.
+             * @param {number} speedScaleFactor - Faktor zur Skalierung der Geschwindigkeit basierend auf Delta-Time.
+             */
+            update(speedScaleFactor) {
+                const dxToPlayer = player.x - this.x;
+                const dyToPlayer = player.y - this.y;
+                const angleToPlayer = Math.atan2(dyToPlayer, dxToPlayer);
+
+                let angleDiff = angleToPlayer - this.angle;
+
+                if (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+                if (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+                this.angle += Math.min(Math.abs(angleDiff), this.turnSpeed * speedScaleFactor) * Math.sign(angleDiff);
+
+                this.x += Math.cos(this.angle) * this.speed * speedScaleFactor;
+                this.y += Math.sin(this.angle) * this.speed * speedScaleFactor;
+
+                if (this.trail.length === 0 ||
+                    Math.sqrt(Math.pow(this.x - this.trail[this.trail.length - 1].x, 2) +
+                                Math.pow(this.y - this.trail[this.trail.length - 1].y, 2)) > TRAIL_SPACING_ROCKET) {
+                    this.trail.push({ x: this.x, y: this.y });
+                }
+
+                if (this.trail.length > TRAIL_LENGTH_ROCKET) {
+                    this.trail.shift();
+                }
+            }
+        }
+
+        /**
+         * Wird einmal aufgerufen, wenn das Spiel endet, um die UI zu aktualisieren.
+         * Bündelt die Logik für das Ende des Spiels.
+         */
+        function endGame() {
+            if (score > highScore) {
+                highScore = score;
+                saveHighScore(highScore);
+                newHighScoreMessage.style.display = 'block';
+                gameOverHighScore.style.display = 'none';
+            } else {
+                newHighScoreMessage.style.display = 'none';
+                gameOverHighScore.style.display = 'block';
+                gameOverHighScore.textContent = `High Score: ${highScore}`;
+            }
+            finalScoreDisplay.textContent = score;
+            finalDistanceDisplay.textContent = `${Math.floor(distanceTraveled)}m`;
+            
+            if (lastMomentImage) {
+                downloadLastMomentButton.style.display = 'block';
+                downloadLastMomentButton.href = lastMomentImage;
+            } else {
+                downloadLastMomentButton.style.display = 'none';
+            }
+            
+            gameOverScreen.style.display = 'flex';
+            isGameOverUIUpdated = true;
+
+        }
+
+        /**
+         * Initialisiert das Spiel auf den Anfangszustand.
+         */
+        function initGame() {
+            player = new Player();
+            rockets = [];
+            score = 0;
+            highScore = loadHighScore();
+            distanceTraveled = 0;
+            gameStarted = false;
+            playerMovementEnabled = true;
+            gameOver = false;
+            lastRocketSpawnTime = 0;
+            lastFrameTime = 0;
+            gameStartTime = 0;
+            isGameOverUIUpdated = false;
+            lastMomentImage = null;
+            
+            stars = [];
+            const starWorldWidth = canvas.width * STAR_WORLD_WIDTH_MULTIPLIER;
+            const starWorldHeight = canvas.height * STAR_WORLD_HEIGHT_MULTIPLIER;
+            for (let i = 0; i < NUM_STARS; i++) {
+                stars.push({
+                    x: Math.random() * starWorldWidth - starWorldWidth / 2,
+                    y: Math.random() * starWorldHeight - starWorldHeight / 2,
+                    size: Math.random() * 2 + 0.5,
+                    color: colors.starColor(Math.random() * 0.5 + 0.5)
+                });
+            }
+
+            scoreDisplay.textContent = `Score: 0`;
+            distanceDisplay.textContent = `Distance: 0m`;
+            startScreenHighScore.textContent = `High Score: ${highScore}`;
+            gameOverHighScore.textContent = `High Score: ${highScore}`;
+            newHighScoreMessage.style.display = 'none';
+            gameOverHighScore.style.display = 'block';
+            speedDisplay.textContent = `Player Speed: ${player.speed.toFixed(2)}`;
+            rocketCountDisplay.textContent = `Rockets inbound: 0`;
+            startScreen.style.display = 'flex';
+            gameOverScreen.style.display = 'none';
+            uiRightContainer.style.display = 'none';
+            downloadLastMomentButton.style.display = 'none';
+            
+            resizeCanvas();
+        }
+
+        /**
+         * Startet das Spiel.
+         */
+        function startGame() {
+            gameStarted = true;
+            playerMovementEnabled = true;
+            startScreen.style.display = 'none';
+            gameOver = false;
+            lastFrameTime = performance.now();
+            gameStartTime = performance.now();
+            uiRightContainer.style.display = 'flex';
+            requestAnimationFrame(gameLoop);
+        }
+
+        /**
+         * Spawnt eine neue Rakete an einer zufälligen Seite des Bildschirms,
+         * bevorzugt Seiten, die nicht in der aktuellen Bewegungsrichtung des Spielers liegen.
+         */
+        function spawnRocket() {
+            let forbiddenSides = new Set();
+            const playerDirX = player.targetScreenX - playerScreenX;
+            const playerDirY = player.targetScreenY - playerScreenY;
+            const movementThreshold = player.size * 3;
+
+            if (playerDirY < -movementThreshold) {
+                forbiddenSides.add(0);
+            } else if (playerDirY > movementThreshold) {
+                forbiddenSides.add(2);
+            }
+
+            if (playerDirX > movementThreshold) {
+                forbiddenSides.add(1);
+            } else if (playerDirX < -movementThreshold) {
+                forbiddenSides.add(3);
+            }
+
+            let possibleSides = [0, 1, 2, 3].filter(side => !forbiddenSides.has(side));
+
+            if (possibleSides.length === 0) {
+                possibleSides = [0, 1, 2, 3];
+            }
+
+            const side = possibleSides[Math.floor(Math.random() * possibleSides.length)];
+            let x, y;
+
+            const spawnPadding = 100;
+
+            switch (side) {
+                case 0:
+                    x = Math.random() * canvas.width;
+                    y = -spawnPadding;
+                    break;
+                case 1:
+                    x = canvas.width + spawnPadding;
+                    y = Math.random() * canvas.height;
+                    break;
+                case 2:
+                    x = Math.random() * canvas.width;
+                    y = canvas.height + spawnPadding;
+                    break;
+                case 3:
+                    x = -spawnPadding;
+                    y = Math.random() * canvas.height;
+                    break;
+            }
+            rockets.push(new Rocket(x - worldOffsetX, y - worldOffsetY));
+        }
+
+        /**
+         * Überprüft die Kollision zwischen zwei kreisförmigen Objekten.
+         * @param {object} objA - Das erste Objekt (Spieler).
+         * @param {object} objB - Das zweite Objekt (Rakete).
+         * @returns {boolean} True, wenn eine Kollision vorliegt, sonst false.
+         */
+        function checkCircleCollision(objA, objB) {
+            const playerCollisionX = playerScreenX;
+            const playerCollisionY = playerScreenY;
+
+            const rocketCollisionX = objB.x + worldOffsetX;
+            const rocketCollisionY = objB.y + worldOffsetY;
+
+            const dx = playerCollisionX - rocketCollisionX;
+            const dy = playerCollisionY - rocketCollisionY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < (objA.size + objB.size);
+        }
+
+        /**
+         * Überprüft die Kollision zwischen zwei Raketen.
+         * @param {object} rocket1 - Die erste Rakete.
+         * @param {object} rocket2 - Die zweite Rakete.
+         * @returns {boolean} True, wenn eine Kollision vorliegt, sonst false.
+         */
+        function checkRocketToRocketCollision(rocket1, rocket2) {
+            const dx = rocket1.x - rocket2.x;
+            const dy = rocket1.y - rocket2.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < (rocket1.size + rocket2.size);
+        }
+
+        let lastScoreTime = 0;
+
+        /**
+         * Zeigt die Score-Erhöhung mit einer Animation an.
+         * @param {number} value - Der Wert der Score-Erhöhung.
+         */
+        function showScoreIncrement(value) {
+            scoreIncrementDisplay.textContent = `+${value}`;
+            scoreIncrementDisplay.style.color = colors.uiTextColor;
+            scoreIncrementDisplay.classList.remove('show-increment');
+            void scoreIncrementDisplay.offsetWidth;
+            scoreIncrementDisplay.classList.add('show-increment');
+
+            scoreDisplayContainer.classList.remove('score-bounce');
+            void scoreDisplayContainer.offsetWidth;
+            scoreDisplayContainer.classList.add('score-bounce');
+        }
+
+        /**
+         * Die Hauptspiel-Schleife. Wird bei jedem Frame aufgerufen.
+         * @param {DOMHighResTimeStamp} currentTime - Die aktuelle Zeit, die vom Browser bereitgestellt wird.
+         */
+        function gameLoop(currentTime) {
+            requestAnimationFrame(gameLoop);
+
+            if (gameOver) {
+                if (!isGameOverUIUpdated) {
+                    endGame();
+                }
+                uiRightContainer.style.display = 'none';
+                return;
+            }
+
+            if (!gameStarted) {
+                startScreen.style.display = 'flex';
+                return;
+            }
+
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            isGameOverUIUpdated = false;
+
+            const deltaTime = currentTime - lastFrameTime;
+            lastFrameTime = currentTime;
+
+            const speedScaleFactor = deltaTime / TARGET_FRAME_DURATION_MS;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const radialGradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 1.5
+            );
+            radialGradient.addColorStop(0, colors.canvasGradient1);
+            radialGradient.addColorStop(0.5, colors.canvasGradient2);
+            radialGradient.addColorStop(1, colors.canvasGradient3);
+            ctx.fillStyle = radialGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const starWorldWidth = canvas.width * STAR_WORLD_WIDTH_MULTIPLIER;
+            const starWorldHeight = canvas.height * STAR_WORLD_HEIGHT_MULTIPLIER;
+
+            stars.forEach(star => {
+                ctx.fillStyle = star.color;
+                const displayX = (star.x - player.x) * STAR_PARALLAX_FACTOR + playerScreenX;
+                const displayY = (star.y - player.y) * STAR_PARALLAX_FACTOR + playerScreenY;
+
+                ctx.beginPath();
+                ctx.arc(displayX, displayY, star.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                const playerRelativeX = star.x - player.x;
+                const playerRelativeY = star.y - player.y;
+
+                if (playerRelativeX < -starWorldWidth / 2) {
+                    star.x += starWorldWidth;
+                } else if (playerRelativeX > starWorldWidth / 2) {
+                    star.x -= starWorldWidth;
+                }
+
+                if (playerRelativeY < -starWorldHeight / 2) {
+                    star.y += starWorldHeight;
+                } else if (playerRelativeY > starWorldHeight / 2) {
+                    star.y -= starWorldHeight;
+                }
+            });
+
+            if ((currentTime - gameStartTime > INITIAL_SPAWN_DELAY) && (currentTime - lastRocketSpawnTime > ROCKET_SPAWN_INTERVAL)) {
+                spawnRocket();
+                lastRocketSpawnTime = currentTime;
+            }
+
+            let currentFrameScoreIncrement = 0;
+
+            if (currentTime - lastScoreTime > SCORE_INTERVAL) {
+                currentFrameScoreIncrement += SCORE_INCREMENT_TIME;
+                lastScoreTime = currentTime;
+            }
+
+            player.update(speedScaleFactor);
+            player.draw();
+
+            // Die Distanz wird nur hochgezählt, wenn sich der Spieler wirklich bewegt.
+            const dxScreen = player.targetScreenX - playerScreenX;
+            const dyScreen = player.targetScreenY - playerScreenY;
+            const distanceScreen = Math.sqrt(dxScreen * dxScreen + dyScreen * dyScreen);
+
+            const movementThreshold = 1.0;
+            if (distanceScreen > movementThreshold) {
+                const distanceIncrement = player.speed * speedScaleFactor;
+                distanceTraveled += distanceIncrement;
+            }
+
+            const rocketsToExplode = new Set();
+            let collisionCount = 0;
+
+            for (let i = 0; i < rockets.length; i++) {
+                const rocket1 = rockets[i];
+                if (rocketsToExplode.has(rocket1)) continue;
+
+                for (let j = i + 1; j < rockets.length; j++) {
+                    const rocket2 = rockets[j];
+                    if (rocketsToExplode.has(rocket2)) continue;
+
+                    if (checkRocketToRocketCollision(rocket1, rocket2)) {
+                        rocketsToExplode.add(rocket1);
+                        rocketsToExplode.add(rocket2);
+                    }
+                }
+            }
+            
+            if (rocketsToExplode.size > 0) {
+                currentFrameScoreIncrement += rocketsToExplode.size * SCORE_PER_ROCKET_COLLISION;
+            }
+
+            for (let i = rockets.length - 1; i >= 0; i--) {
+                const rocket = rockets[i];
+                if (rocketsToExplode.has(rocket)) {
+                    rockets.splice(i, 1);
+                    continue;
+                }
+
+                rocket.update(speedScaleFactor);
+                rocket.draw();
+
+                if (checkCircleCollision(player, rocket)) {
+                    lastMomentImage = canvas.toDataURL('image/png');
+                    gameOver = true;
+                }
+            }
+            
+            if (gameOver) {
+                return;
+            }
+
+            if (currentFrameScoreIncrement > 0) {
+                score += currentFrameScoreIncrement;
+                showScoreIncrement(currentFrameScoreIncrement);
+            }
+
+            scoreDisplay.textContent = `Score: ${score}`;
+            rocketCountDisplay.textContent = `Rockets inbound: ${rockets.length}`;
+            distanceDisplay.textContent = `Distance: ${Math.floor(distanceTraveled)}m`;
+        }
+
+        // Event-Listener für Mausbewegung (Spielersteuerung)
+        canvas.addEventListener('mousemove', (e) => {
+            if (gameStarted && playerMovementEnabled) {
+                player.targetScreenX = e.clientX;
+                player.targetScreenY = e.clientY;
+            }
+        });
+
+        // Event-Listener für Touch-Bewegung (Spielersteuerung auf Mobilgeräten)
+        canvas.addEventListener('touchmove', (e) => {
+            if (gameStarted && playerMovementEnabled) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                player.targetScreenX = touch.clientX;
+                player.targetScreenY = touch.clientY;
+            }
+        }, { passive: false });
+
+        // NEU: Event-Listener, um das Spiel über den Start-Bildschirm zu starten
+        startScreen.addEventListener('mousedown', (e) => {
+            // Check, ob der Klick von einem Element kam, das den Neustart verhindern sollte (hier nicht nötig, aber als gute Praxis)
+            initGame();
+            startGame();
+        });
+        startScreen.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Verhindert das Standard-Verhalten des Touch-Events (z.B. Scrollen)
+            initGame();
+            startGame();
+        }, { passive: false });
+
+        // NEU: Event-Listener, um das Spiel über den Game-Over-Bildschirm neu zu starten
+        gameOverScreen.addEventListener('mousedown', (e) => {
+            // Wichtig: Überprüfe, ob das geklickte Element NICHT der Download-Button ist
+            if (e.target !== downloadLastMomentButton) {
+                initGame();
+                startGame();
+            }
+        });
+        gameOverScreen.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            // Wichtig: Überprüfe, ob das geklickte Element NICHT der Download-Button ist
+            if (e.target !== downloadLastMomentButton) {
+                initGame();
+                startGame();
+            }
+        }, { passive: false });
+        
+        // NEU: Füge einen expliziten Klick-Handler für den Download-Button hinzu, um das Neustart-Ereignis zu stoppen.
+        downloadLastMomentButton.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
+        downloadLastMomentButton.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+        }, { passive: false });
+
+        // Event-Listener für Tastatureingaben (Spielergeschwindigkeit anpassen)
+        document.addEventListener('keydown', (e) => {
+            if (gameStarted && playerMovementEnabled) {
+                if (e.key === 'q' || e.key === 'Q') {
+                    player.speed = Math.max(MIN_PLAYER_SPEED, player.speed - PLAYER_SPEED_ADJUST_STEP);
+                } else if (e.key === 'e' || e.key === 'E') {
+                    player.speed = Math.min(MAX_PLAYER_SPEED, player.speed + PLAYER_SPEED_ADJUST_STEP);
+                }
+                speedDisplay.textContent = `Player Speed: ${player.speed.toFixed(2)}`;
+            }
+        });
+
+        initGame();
+    </script>
+</body>
+</html>
